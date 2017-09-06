@@ -55,36 +55,30 @@ class Scene:
         new.objects +=  objs
         return new
 
-    def render(self, outfile=None, height=None, width=None,
-                     quality=None, antialiasing=None, remove_temp=True,
-                     auto_camera_angle=True, show_window=False, tempfile=None,
-                     includedirs=None):
+    def render(self, *args, **kwargs):
 
         """ Renders the scene to a PNG, a numpy array, or the IPython Notebook.
 
-        Parameters
+        See io.render_povstring help for all parameters
+        
+        Specific parameters
         ------------
-
-        outfile
-          Name of the output:
-          - "myfile.png" to output a PNG file
-          - None to output a numpy array (if numpy is installed).
-          - 'ipython' (and call this function last in an IPython Notebook)
-
-        height
-          height in pixels
-
-        width
-          width in pixels
+        
+        args[0]
+          First argument in outfile if present
+        
+        auto_camera_angle
+          Set camera_angle for Scene based on width and height
 
         """
+        
+        if len(args) == 1: #First argument may be filename
+            kwargs['outfile'] = args[0]
 
-        if auto_camera_angle and width is not None:
-            self.camera = self.camera.add_args(['right', [1.0*width/height, 0,0]])
+        if 'auto_camera_angle' in kwargs and 'width' in kwargs:
+            self.camera = self.camera.add_args(['right', [1.0*kwargs['width']/kwargs['height'], 0,0]])
 
-        return render_povstring(str(self), outfile, height, width,
-                                quality, antialiasing, remove_temp, show_window,
-                                tempfile, includedirs)
+        return render_povstring(str(self), **kwargs)
 
 
 class POVRayElement:
@@ -142,7 +136,7 @@ class Camera(POVRayElement):
     """ Camera([type,]  'location', [x,y,z], 'look_at', [x,y,z]) """
 
 class Cylinder(POVRayElement):
-    """ Cylinder([type,]  'location', [x,y,z], 'look_at', [x,y,z]) """
+    """ Cylinder(base_point, cap_point, radius, a*) """
 
 class Difference(POVRayElement):
     """ Difference(object1, object2, *a) """
@@ -210,6 +204,9 @@ class SkySphere(POVRayElement):
 
 class Sphere(POVRayElement):
     """ Sphere(location_xyz, radius, *a) """
+
+class Torus(POVRayElement):
+    """ Torus(major radius, minor radius, *a) """
 
 class Text(POVRayElement):
     """  Text('ttf', 'Hello', 'crystall.ttf', 1,0) """

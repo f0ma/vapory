@@ -5,6 +5,7 @@ All the advanced Input/Output operations for Vapory
 import re
 import os
 import subprocess
+import tempfile
 from .config import POVRAY_BINARY
 
 try:
@@ -52,9 +53,7 @@ def ppm_to_numpy(filename=None, buffer=None, byteorder='>'):
 
 
 
-def render_povstring(string, outfile=None, height=None, width=None,
-                     quality=None, antialiasing=None, remove_temp=True,
-                     show_window=False, tempfile=None, includedirs=None):
+def render_povstring(string, **kwargs):
 
     """ Renders the provided scene description with POV-Ray.
 
@@ -76,50 +75,98 @@ def render_povstring(string, outfile=None, height=None, width=None,
 
     width
       width in pixels
-
+      
+    tempfile
+      temprorary .pov file name, default '__temp__.pov'
+    
+    preserve_temp
+      save .pov file after rendering, default False
+      
+    quality
+      quality value in [0..9], default None
+    
+    antialiasing
+      antialiasing level in [0..9], default None
+      
+    antialias_depth
+      antialias_depth in [0.0..1.0], default None
+    
+    jitter
+      enable jitter, default False
+      
+    show_window
+      show povray window, default False
+      
+    output_alpha
+      enable alpha in output, default False    
+    
+    include_dirs
+      include directory, default []
+    
     """
 
-    pov_file = tempfile or '__temp__.pov'
-    with open(pov_file, 'w+') as f:
-        f.write(string)
+    pov_file = kwargs['tempfile'] if 'tempfile' in kwargs else ''
+    
+    if pov_file == '':
+        f, pov_file = tempfile.mkstemp(suffix='.pov')
+        os.write(f, string.encode('ascii'))
+        os.close(f)
+    else:
+        with open(pov_file, 'w+') as f:
+            f.write(string)
 
-    return_np_array = (outfile is None)
-    display_in_ipython = (outfile=='ipython')
+    return_np_array = 'outfile' not in kwargs
+    
+    display_in_ipython = 'outfile' in kwargs and kwargs['outfile']=='ipython'
 
     format_type = "P" if return_np_array else "N"
 
+    outfile_name = kwargs['outfile'] if 'outfile' in kwargs else ""
+
     if return_np_array:
-        outfile='-'
+        outfile_name='-'
 
     if display_in_ipython:
-        outfile = '__temp_ipython__.png'
+        outfile_name = '__temp_ipython__.png'
 
     cmd = [POVRAY_BINARY, pov_file]
-    if height is not None: cmd.append('+H%d'%height)
-    if width is not None: cmd.append('+W%d'%width)
-    if quality is not None: cmd.append('+Q%d'%quality)
-    if antialiasing is not None: cmd.append('+A%f'%antialiasing)
-    if not show_window:
-        cmd.append('-D')
-    else:
+    
+    if 'height' in kwargs: cmd.append('+H%d'%kwargs['height'])
+    if 'width'  in kwargs: cmd.append('+W%d'%kwargs['width'])
+    if 'quality' in kwargs: cmd.append('+Q%d'%kwargs['quality'])
+    if 'antialiasing' in kwargs: cmd.append('+A%f'%kwargs['antialiasing'])
+    if 'antialias_depth'  in kwargs: cmd.append('+R%f'%kwargs['antialias_depth'])
+    if 'jitter' in kwargs and kwargs['jitter']: cmd.append('+J')
+    
+    if 'show_window' in kwargs and kwargs['show_window']:
         cmd.append('+D')
-    if includedirs is not None:
-        for dir in includedirs:
+    else:
+        cmd.append('-D')
+    
+    if 'output_alpha' in kwargs and kwargs['output_alpha']:
+        cmd.append("+UA")
+    
+    if 'include_dirs' in kwargs and kwargs['include_dirs'] != []:
+        for dir in kwargs['include_dirs']:
             cmd.append('+L%s'%dir)
+    
     cmd.append("Output_File_Type=%s"%format_type)
-    cmd.append("+O%s"%outfile)
+    cmd.append("+O%s"%outfile_name)
+    
     process = subprocess.Popen(cmd, stderr=subprocess.PIPE,
                                     stdin=subprocess.PIPE,
                                     stdout=subprocess.PIPE)
 
-    out, err = process.communicate(string.encode('ascii'))
+    out, err = process.communicate()
 
-    if remove_temp:
+    if 'preserve_temp' in kwargs and kwargs['preserve_temp']:
+        pass
+    else:
         os.remove(pov_file)
 
     if process.returncode:
-        print(type(err), err)
-        raise IOError("POVRay rendering failed with the following error: "+err.decode('ascii'))
+        print(err.decode('ascii'))
+        raise IOError("POVRay rendering failed with error")
 
     if return_np_array:
         return ppm_to_numpy(buffer=out)

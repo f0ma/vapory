@@ -2,3 +2,4 @@
 
 from .version import __version__
 from .vapory import *
+from .suite import *
